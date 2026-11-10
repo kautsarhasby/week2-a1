@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, status, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel,Field
+from typing import Optional
 
 app = FastAPI()
 
@@ -15,8 +16,8 @@ class CreateTask(BaseModel):
     title: str = Field(...,min_length=1,description="title cannot empty")
 
 class UpdateTask(BaseModel):
-    title: str = Field(...,min_length=1,description="title cannot empty")
-    done: bool = Field(...,description="done cannot empty")
+    title: Optional[str] = Field(None,description="title optional")
+    done: Optional[bool] = None
 
 tasks: Task = [
     {"id" : 1, "title" : "Refactor code", "done" : True},
@@ -33,7 +34,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         },
     )
 
-@app.post("/tasks",status_code=201)
+@app.post("/tasks",status_code=201, summary="Create new task")
 async def postTask(body : CreateTask):
     tasks.append({
         "id" : len(tasks)+1,
@@ -42,35 +43,37 @@ async def postTask(body : CreateTask):
     })
     return tasks
 
-@app.get('/')
+@app.get('/', summary="Retrieve information of the app")
 async def root():
     return {"name": "Task API", "version": "1.0", "endpoints": ["/tasks"]}
 
-@app.get("/health")
+@app.get("/health", summary="Check health of the app")
 async def health():
     return {"status": "ok"}
 
-@app.get("/tasks")
+@app.get("/tasks", summary="Retrieve list of the tasks")
 async def getTasks():
     return tasks
 
-@app.get("/tasks/{id}")
+@app.get("/tasks/{id}", summary="Retrieve task by id")
 async def getTasks(id : str):
     for task in tasks:
         if int(id) == task["id"]:
             return {"task" : task}
     raise HTTPException(status_code=404, detail=f"task {id} not found")
 
-@app.put("/tasks/{id}")
+@app.put("/tasks/{id}",summary="Update task by id")
 async def updateTasks(id: str,body : UpdateTask):
     for task in tasks:
         if int(id) == task["id"]:
-            task["title"] = body.title
-            task["done"] = body.done
+            if body.title is not None:
+                task["title"] = body.title  
+            if body.done is not None:
+                task["done"] = body.done
             return {"task" : task, "message":"updated task"}
     raise HTTPException(status_code=404, detail=f"Unknown {id}")
 
-@app.delete("/tasks/{id}",status_code=204)
+@app.delete("/tasks/{id}",status_code=204, summary="Delete task by id")
 async def deleteTasks(id: str):
     for index, task in enumerate(tasks):
         if int(id) == task["id"]:
