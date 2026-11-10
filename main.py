@@ -1,13 +1,44 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel,Field
 
 app = FastAPI()
 
 
-tasks = [
-    {"id" : "1", "title" : "Refactor code", "done" : True},
-    {"id" : "2", "title" : "Learn Mandarin", "done" : True},
-    {"id" : "3", "title" : "Clean up laptop", "done" : False},
+class Task(BaseModel):
+    id: int
+    title: str 
+    done : bool = False
+
+class CreateTask(BaseModel):
+    title: str = Field(...,min_length=1,description="title cannot empty")
+
+
+tasks: Task = [
+    {"id" : 1, "title" : "Refactor code", "done" : True},
+    {"id" : 2, "title" : "Learn Mandarin", "done" : True},
+    {"id" : 3, "title" : "Clean up laptop", "done" : False},
 ]
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={
+            "error": "Bad Request",
+            "message": "Title cannot empty"
+        },
+    )
+
+@app.post("/tasks",status_code=201)
+async def postTask(body : CreateTask):
+    tasks.append({
+        "id" : len(tasks)+1,
+        "title" : body.title,
+        "done" : False
+    })
+    return tasks
 
 @app.get('/')
 async def root():
@@ -24,6 +55,6 @@ async def getTasks():
 @app.get("/tasks/{id}")
 async def getTasks(id : str):
     for task in tasks:
-        if id == task["id"]:
+        if int(id) == task["id"]:
             return {"task" : task}
     raise HTTPException(status_code=404, detail=f"task {id} not found")
