@@ -14,6 +14,9 @@ class Task(BaseModel):
 class CreateTask(BaseModel):
     title: str = Field(...,min_length=1,description="title cannot empty")
 
+class UpdateTask(BaseModel):
+    title: str = Field(...,min_length=1,description="title cannot empty")
+    done: bool = Field(...,description="done cannot empty")
 
 tasks: Task = [
     {"id" : 1, "title" : "Refactor code", "done" : True},
@@ -27,7 +30,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=status.HTTP_400_BAD_REQUEST,
         content={
             "error": "Bad Request",
-            "message": "Title cannot empty"
         },
     )
 
@@ -58,3 +60,20 @@ async def getTasks(id : str):
         if int(id) == task["id"]:
             return {"task" : task}
     raise HTTPException(status_code=404, detail=f"task {id} not found")
+
+@app.put("/tasks/{id}")
+async def updateTasks(id: str,body : UpdateTask):
+    for task in tasks:
+        if int(id) == task["id"]:
+            task["title"] = body.title
+            task["done"] = body.done
+            return {"task" : task, "message":"updated task"}
+    raise HTTPException(status_code=404, detail=f"Unknown {id}")
+
+@app.delete("/tasks/{id}",status_code=204)
+async def deleteTasks(id: str):
+    for index, task in enumerate(tasks):
+        if int(id) == task["id"]:
+            tasks.pop(index)
+            return
+    raise HTTPException(status_code=404, detail=f"Unknown {id}")
