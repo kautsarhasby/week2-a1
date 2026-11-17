@@ -5,8 +5,6 @@ from pydantic import BaseModel,Field
 from typing import Optional
 
 app = FastAPI()
-
-
 class Task(BaseModel):
     id: int
     title: str 
@@ -52,8 +50,20 @@ async def health():
     return {"status": "ok"}
 
 @app.get("/tasks", summary="Retrieve list of the tasks")
-async def getTasks():
-    return tasks
+async def getTasks(done : str | None = None, search: str | None = None ):
+    if done is None and search is None:
+        return tasks
+    if done:
+        if done == "true":
+            return [task for task in tasks if task["done"] is True]
+        elif done == "false":
+            return [task for task in tasks if task["done"] is False]
+    if search:
+        return [task for task in tasks if search.lower() in task["title"].lower()]
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Query not valid")
+
 
 @app.get("/tasks/{id}", summary="Retrieve task by id")
 async def getTasks(id : str):
@@ -80,3 +90,25 @@ async def deleteTasks(id: str):
             tasks.pop(index)
             return
     raise HTTPException(status_code=404, detail=f"Unknown {id}")
+
+@app.get("/stats")
+async def getStats():
+    done = []
+    open = []
+    for task in tasks:
+        if task["done"] == True:
+            done.append(task)
+        else:
+            open.append(task)
+    return {"total" : len(tasks), "done" : len(done), "open" : len(open)}
+
+
+@app.post("/reset")
+async def resetTask():
+    global tasks
+    tasks= [
+    {"id" : 1, "title" : "Refactor code", "done" : True},
+    {"id" : 2, "title" : "Learn Mandarin", "done" : True},
+    {"id" : 3, "title" : "Clean up laptop", "done" : False},
+]
+    return { "message" : "Tasks has been reset", "task" : tasks}
