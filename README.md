@@ -1,10 +1,10 @@
-<<<<<<< HEAD
 ### The Mortality experiment
 
 **To do**: create a few tasks, restart your server, GET /tasks .
 
 **Result and Reason** : The task disappear because didnt have any database, the tasks only saved on memory and its temporary. If the server restart or down, the data will disappear
-=======
+
+
 # FastAPI Task Manager Backend
 
 A lightweight, robust in-memory task management API built with **FastAPI**, designed for speed, clean validation, and seamless developer experience.
@@ -63,4 +63,3 @@ content-length: 34
 
 Access the built-in interactive documentation instantly in your browser:
 🔗 **[http://localhost:8000/docs](http://localhost:8000/docs)**
->>>>>>> eb92d30daaba99ae00252c79a632ba40735da7fb
