@@ -1,10 +1,10 @@
 from fastapi import FastAPI, HTTPException, status, Request
+from contextlib import asynccontextmanager
 from fastapi.exceptions import RequestValidationError
+from config import database
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel,Field
 from typing import Optional
-
-app = FastAPI()
 class Task(BaseModel):
     id: int
     title: str 
@@ -12,16 +12,19 @@ class Task(BaseModel):
 
 class CreateTask(BaseModel):
     title: str = Field(...,min_length=1,description="title cannot empty")
+    done: bool = False
 
 class UpdateTask(BaseModel):
     title: Optional[str] = Field(None,description="title optional")
     done: Optional[bool] = None
 
-tasks: Task = [
-    {"id" : 1, "title" : "Refactor code", "done" : True},
-    {"id" : 2, "title" : "Learn Mandarin", "done" : True},
-    {"id" : 3, "title" : "Clean up laptop", "done" : False},
-]
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    database.init_db()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
