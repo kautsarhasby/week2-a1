@@ -54,8 +54,11 @@ async def health():
 
 @app.get("/tasks", summary="Retrieve list of the tasks")
 async def getTasks(done : str | None = None, search: str | None = None ):
+    conn = database.get_db()
     if done is None and search is None:
-        return tasks
+        rows = conn.execute("SELECT * FROM tasks").fetchall()
+        conn.close()
+        return [{"id": r["id"], "title": r["title"], "done": bool(r["done"])} for r in rows]
     if done:
         if done == "true":
             return [task for task in tasks if task["done"] is True]
@@ -69,12 +72,14 @@ async def getTasks(done : str | None = None, search: str | None = None ):
 
 
 @app.get("/tasks/{id}", summary="Retrieve task by id")
-async def getTasks(id : str):
-    for task in tasks:
-        if int(id) == task["id"]:
-            return {"task" : task}
-    raise HTTPException(status_code=404, detail=f"task {id} not found")
-
+async def getTaskById(id : str):
+    conn = database.get_db()
+    row = conn.execute("SELECT * FROM tasks WHERE id = ?",(id)).fetchone()
+    conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"task {id} not found")
+    return {"task": {"id": int(row["id"]), "title": row["title"], "done": bool(row["done"])}}
+    
 @app.put("/tasks/{id}",summary="Update task by id")
 async def updateTasks(id: str,body : UpdateTask):
     for task in tasks:
