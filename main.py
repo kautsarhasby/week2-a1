@@ -36,13 +36,19 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 @app.post("/tasks",status_code=201, summary="Create new task")
-async def postTask(body : CreateTask):
-    tasks.append({
-        "id" : len(tasks)+1,
-        "title" : body.title,
-        "done" : False
-    })
-    return tasks
+async def postTask(task : CreateTask):
+    if not task.title.strip():
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO tasks (title, done) VALUES (?, ?)",
+        (task.title.strip(), int(task.done)) 
+    )
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+    return {"id": new_id, "title": task.title.strip(), "done": task.done}
 
 @app.get('/', summary="Retrieve information of the app")
 async def root():
@@ -79,7 +85,7 @@ async def getTaskById(id : str):
     if row is None:
         raise HTTPException(status_code=404, detail=f"task {id} not found")
     return {"task": {"id": int(row["id"]), "title": row["title"], "done": bool(row["done"])}}
-    
+
 @app.put("/tasks/{id}",summary="Update task by id")
 async def updateTasks(id: str,body : UpdateTask):
     for task in tasks:
