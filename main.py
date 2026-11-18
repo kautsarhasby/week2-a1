@@ -87,23 +87,42 @@ async def getTaskById(id : str):
     return {"task": {"id": int(row["id"]), "title": row["title"], "done": bool(row["done"])}}
 
 @app.put("/tasks/{id}",summary="Update task by id")
-async def updateTasks(id: str,body : UpdateTask):
-    for task in tasks:
-        if int(id) == task["id"]:
-            if body.title is not None:
-                task["title"] = body.title  
-            if body.done is not None:
-                task["done"] = body.done
-            return {"task" : task, "message":"updated task"}
-    raise HTTPException(status_code=404, detail=f"Unknown {id}")
+async def updateTasks(id: str,task : UpdateTask):
+    conn = database.get_db()
+    row = conn.execute("SELECT * FROM tasks WHERE id = ?", [id]).fetchone()
+
+    if row is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail=f"task {id} not found")
+
+    if task.title is not None and not task.title.strip():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+
+    new_title = task.title.strip() if task.title is not None else row["title"]
+    new_done = int(task.done) if task.done is not None else row["done"]
+    conn.execute(
+        "UPDATE tasks SET title = ?, done = ? WHERE id = ?",
+        [new_title, new_done, id]
+    )
+    conn.commit()
+    conn.close()
+
+    return {
+        "task": {"id": id, "title": new_title, "done": bool(new_done)},
+        "message": "updated task"
+    }
 
 @app.delete("/tasks/{id}",status_code=204, summary="Delete task by id")
-async def deleteTasks(id: str):
-    for index, task in enumerate(tasks):
-        if int(id) == task["id"]:
-            tasks.pop(index)
-            return
-    raise HTTPException(status_code=404, detail=f"Unknown {id}")
+async def deleteTask(id: str):
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM tasks WHERE id = ?",(int(id),))
+    conn.commit()
+    conn.close()
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail=f"task {id} not found")
+    
 
 @app.get("/stats")
 async def getStats():
