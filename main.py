@@ -5,6 +5,7 @@ from config import database
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel,Field
 from typing import Optional
+from datetime import datetime, timezone
 class Task(BaseModel):
     id: int
     title: str 
@@ -17,7 +18,6 @@ class CreateTask(BaseModel):
 class UpdateTask(BaseModel):
     title: Optional[str] = Field(None,description="title optional")
     done: Optional[bool] = None
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -59,22 +59,28 @@ async def health():
     return {"status": "ok"}
 
 @app.get("/tasks", summary="Retrieve list of the tasks")
-async def getTasks(done : str | None = None, search: str | None = None ):
+async def getTasks(done: str | None = None, search: str | None = None):
     conn = database.get_db()
     if done is None and search is None:
-        rows = conn.execute("SELECT * FROM tasks").fetchall()
+        rows = conn.execute("SELECT * FROM tasks ORDER BY title").fetchall()
         conn.close()
-        return [{"id": r["id"], "title": r["title"], "done": bool(r["done"])} for r in rows]
-    if done:
-        if done == "true":
-            return [task for task in tasks if task["done"] is True]
-        elif done == "false":
-            return [task for task in tasks if task["done"] is False]
-    if search:
-        return [task for task in tasks if search.lower() in task["title"].lower()]
-    else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Query not valid")
+        return [{"id": r["id"], "title": r["title"], "done": bool(r["done"]),"created_at": r["created_at"],
+                "updated_at": r["updated_at"],} for r in rows]
+    if done is not None:
+            rows = conn.execute("SELECT * FROM tasks WHERE done = ? ORDER BY title",(int(bool(done)),)).fetchall()
+            conn.close()
+            return [{"id": r["id"], "title": r["title"], "done": bool(r["done"]),"created_at": r["created_at"],
+        "updated_at": r["updated_at"],} for r in rows]
+    if search is not None:
+        rows = conn.execute("SELECT * FROM tasks WHERE LOWER(title) LIKE ? ORDER BY title", (f"%{search.lower()}%",)).fetchall()
+        conn.close()
+        return [{"id": r["id"], "title": r["title"], "done": bool(r["done"]),"created_at": r["created_at"],
+                "updated_at": r["updated_at"],} for r in rows]
+    conn.close()
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Query not valid"
+    )
 
 
 @app.get("/tasks/{id}", summary="Retrieve task by id")
@@ -84,7 +90,8 @@ async def getTaskById(id : str):
     conn.close()
     if row is None:
         raise HTTPException(status_code=404, detail=f"task {id} not found")
-    return {"task": {"id": int(row["id"]), "title": row["title"], "done": bool(row["done"])}}
+    return [{"id": r["id"], "title": r["title"], "done": bool(r["done"]),"created_at": r["created_at"],
+            "updated_at": r["updated_at"],} for r in row]
 
 @app.put("/tasks/{id}",summary="Update task by id")
 async def updateTasks(id: str,task : UpdateTask):
@@ -126,22 +133,23 @@ async def deleteTask(id: str):
 
 @app.get("/stats")
 async def getStats():
-    done = []
-    open = []
-    for task in tasks:
-        if task["done"] == True:
-            done.append(task)
-        else:
-            open.append(task)
-    return {"total" : len(tasks), "done" : len(done), "open" : len(open)}
-
+    conn = database.get_db()
+    total = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+    done = conn.execute("SELECT COUNT(*) FROM tasks WHERE done = 1").fetchone()[0]
+    open_tasks = conn.execute("SELECT COUNT(*) FROM tasks WHERE done = 0").fetchone()[0]
+    conn.close()
+    return {"total": total, "done": done, "open": open_tasks}
 
 @app.post("/reset")
 async def resetTask():
-    global tasks
-    tasks= [
-    {"id" : 1, "title" : "Refactor code", "done" : True},
-    {"id" : 2, "title" : "Learn Mandarin", "done" : True},
-    {"id" : 3, "title" : "Clean up laptop", "done" : False},
-]
-    return { "message" : "Tasks has been reset", "task" : tasks}
+    conn = database.get_db()
+    conn.execute("DELETE FROM tasks")
+    conn.commit()
+    conn.close()
+    database.init_db()
+    
+    conn = database.get_db()
+    rows = conn.execute("SELECT * FROM tasks").fetchall()
+    conn.close()
+    tasks_list = [{"id": r["id"], "title": r["title"], "done": bool(r["done"])} for r in rows]
+    return {"message": "Tasks has been reset", "task": tasks_list}
