@@ -99,3 +99,7 @@ Help me build the same project using FastAPI as the main backend stack, and use 
 - Get total task statistics
 
 Keep everything in a single `main_ai.py` file for easy maintenance.
+
+### Database Direct-Query Check
+
+Executed `SELECT * FROM tasks WHERE done = 1;` directly on `tasks.db`, which returned only the completed task rows matching the exact JSON items served by `GET /tasks?done=true`.
