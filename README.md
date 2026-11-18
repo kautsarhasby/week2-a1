@@ -108,16 +108,10 @@ Executed `SELECT * FROM tasks WHERE done = 1;` directly on `tasks.db`, which ret
 
 SQLite was chosen because it stores the entire database in a **single local file** with **zero server setup or external dependencies** (built directly into Python's `sqlite3` module), while ensuring all tasks **survive server restarts**.
 
-[SQLite Database Browser](docs/query-docs.png)
+![SQLite Database Browser](docs/query-docs.png)
 
 ### Database Location & Auto-Initialization
 
 - **File location:** `tasks.db` in the project root directory.
 - **Git handling:** Listed in `.gitignore` so each fresh clone starts cleanly without committing local binary database files.
 - **Automatic setup:** Running the startup command automatically creates `tasks.db`, initializes the `tasks` table, and seeds 3 initial tasks if the table is empty (`COUNT(*) == 0`).
-
-### Run the Server
-
-```bash
-uvicorn main:app --reload
-```
