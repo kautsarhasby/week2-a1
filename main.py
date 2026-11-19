@@ -5,7 +5,7 @@ from config import database
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel,Field
 from typing import Optional
-from datetime import datetime, timezone
+
 class Task(BaseModel):
     id: int
     title: str 
@@ -60,38 +60,43 @@ async def health():
 
 @app.get("/tasks", summary="Retrieve list of the tasks")
 async def getTasks(done: str | None = None, search: str | None = None):
-    conn = database.get_db()
-    if done is None and search is None:
-        rows = conn.execute("SELECT * FROM tasks ORDER BY title").fetchall()
-        conn.close()
-        return [{"id": r["id"], "title": r["title"], "done": bool(r["done"]),"created_at": r["created_at"],
-                "updated_at": r["updated_at"],} for r in rows]
-    if done is not None:
-            rows = conn.execute("SELECT * FROM tasks WHERE done = ? ORDER BY title",(int(bool(done)),)).fetchall()
-            conn.close()
-            return [{"id": r["id"], "title": r["title"], "done": bool(r["done"]),"created_at": r["created_at"],
-        "updated_at": r["updated_at"],} for r in rows]
-    if search is not None:
-        rows = conn.execute("SELECT * FROM tasks WHERE LOWER(title) LIKE ? ORDER BY title", (f"%{search.lower()}%",)).fetchall()
-        conn.close()
-        return [{"id": r["id"], "title": r["title"], "done": bool(r["done"]),"created_at": r["created_at"],
-                "updated_at": r["updated_at"],} for r in rows]
-    conn.close()
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Query not valid"
-    )
+    with database.get_db() as conn:
+        if done is not None:
+            if done.lower() == "true":
+                is_done = True
+            elif done.lower() == "false":
+                is_done = False
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Query 'done' must be 'true' or 'false'"
+                )
+            rows = conn.execute(
+                "SELECT id, title, done, created_at, updated_at FROM tasks WHERE done = %s ORDER BY title",
+                (is_done,)
+            ).fetchall()
+            return rows
 
+        if search is not None:
+            rows = conn.execute(
+                "SELECT id, title, done, created_at, updated_at FROM tasks WHERE title ILIKE %s ORDER BY title",
+                (f"%{search}%",)
+            ).fetchall()
+            return rows
+
+        rows = conn.execute(
+            "SELECT id, title, done, created_at, updated_at FROM tasks ORDER BY title"
+        ).fetchall()
+        return rows
 
 @app.get("/tasks/{id}", summary="Retrieve task by id")
 async def getTaskById(id : str):
-    conn = database.get_db()
-    row = conn.execute("SELECT * FROM tasks WHERE id = ?",(id)).fetchone()
-    conn.close()
+    with database.get_db() as conn:
+        row = conn.execute("SELECT * FROM tasks WHERE id = %s",(int(id),)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail=f"task {id} not found")
-    return [{"id": r["id"], "title": r["title"], "done": bool(r["done"]),"created_at": r["created_at"],
-            "updated_at": r["updated_at"],} for r in row]
+    return {"id": row["id"], "title": row["title"], "done": bool(row["done"]),"created_at": row["created_at"],
+            "updated_at": row["updated_at"],} 
 
 @app.put("/tasks/{id}",summary="Update task by id")
 async def updateTasks(id: str,task : UpdateTask):
