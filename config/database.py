@@ -1,40 +1,41 @@
-import sqlite3
+import os
 from datetime import datetime, timezone
+import psycopg
+from psycopg.rows import dict_row
+from dotenv import load_dotenv
 
-DB_NAME = "tasks.db"
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 def init_db():
-    conn = get_db()
-    cursor = conn.cursor()
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id SERIAL PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    done BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            done INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        )
-    """)
+            cursor.execute("SELECT COUNT(*) AS count FROM tasks")
+            count = cursor.fetchone()["count"]
 
-    cursor.execute("SELECT COUNT(*) FROM tasks")
-    count = cursor.fetchone()[0]
-
-    if count == 0:
-        now = datetime.now(timezone.utc).isoformat()
-        sample_tasks = [
-            ("Clean up laptop", 1, now, now),
-            ("Clean up house", 0, now, now),
-            ("Learn Mandarin", 1, now, now)
-        ]
-        cursor.executemany(
-            "INSERT INTO tasks (title, done, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            sample_tasks
-        )
-    conn.commit()
-    conn.close()
+            if count == 0:
+                now = datetime.now(timezone.utc).isoformat()
+                sample_tasks = [
+                    ("Clean up laptop", True, now, now),
+                    ("Clean up house", False, now, now),
+                    ("Learn Mandarin", True, now, now)
+                ]
+                cursor.executemany(
+                    "INSERT INTO tasks (title, done, created_at, updated_at) VALUES (%s, %s, %s, %s)",
+                    sample_tasks
+                )
+        conn.commit()
