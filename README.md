@@ -115,3 +115,9 @@ SQLite was chosen because it stores the entire database in a **single local file
 - **File location:** `tasks.db` in the project root directory.
 - **Git handling:** Listed in `.gitignore` so each fresh clone starts cleanly without committing local binary database files.
 - **Automatic setup:** Running the startup command automatically creates `tasks.db`, initializes the `tasks` table, and seeds 3 initial tasks if the table is empty (`COUNT(*) == 0`).
+
+### Start PostgreSQL (Docker)
+
+```bash
+docker run --name taskdb -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=tasks -p 5432:5432 -v taskdata:/var/lib/postgresql/data -d postgres
+```
