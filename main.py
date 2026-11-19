@@ -5,6 +5,7 @@ from config import database
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel,Field
 from typing import Optional
+from datetime import datetime, timezone
 
 class Task(BaseModel):
     id: int
@@ -36,19 +37,23 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 @app.post("/tasks",status_code=201, summary="Create new task")
-async def postTask(task : CreateTask):
-    if not task.title.strip():
+async def postTask(task: CreateTask):
+    if not task.title or not task.title.strip():
         raise HTTPException(status_code=400, detail="Title cannot be empty")
-    conn = database.get_db()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO tasks (title, done) VALUES (?, ?)",
-        (task.title.strip(), int(task.done)) 
-    )
-    conn.commit()
-    new_id = cursor.lastrowid
-    conn.close()
-    return {"id": new_id, "title": task.title.strip(), "done": task.done}
+
+    now = datetime.now(timezone.utc).isoformat()
+    with database.get_db() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO tasks (title, done, created_at, updated_at)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id, title, done, created_at, updated_at
+            """,
+            (task.title.strip(), bool(task.done), now, now)
+        ).fetchone()
+        conn.commit()
+
+    return row
 
 @app.get('/', summary="Retrieve information of the app")
 async def root():
@@ -99,41 +104,39 @@ async def getTaskById(id : str):
             "updated_at": row["updated_at"],} 
 
 @app.put("/tasks/{id}",summary="Update task by id")
-async def updateTasks(id: str,task : UpdateTask):
-    conn = database.get_db()
-    row = conn.execute("SELECT * FROM tasks WHERE id = ?", [id]).fetchone()
-
-    if row is None:
-        conn.close()
-        raise HTTPException(status_code=404, detail=f"task {id} not found")
-
+async def updateTasks(id: int, task: UpdateTask):
     if task.title is not None and not task.title.strip():
-        conn.close()
         raise HTTPException(status_code=400, detail="Title cannot be empty")
 
-    new_title = task.title.strip() if task.title is not None else row["title"]
-    new_done = int(task.done) if task.done is not None else row["done"]
-    conn.execute(
-        "UPDATE tasks SET title = ?, done = ? WHERE id = ?",
-        [new_title, new_done, id]
-    )
-    conn.commit()
-    conn.close()
+    with database.get_db() as conn:
+        row = conn.execute("SELECT * FROM tasks WHERE id = %s", (id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"task {id} not found")
 
-    return {
-        "task": {"id": id, "title": new_title, "done": bool(new_done)},
-        "message": "updated task"
-    }
+        new_title = task.title.strip() if task.title is not None else row["title"]
+        new_done = bool(task.done) if task.done is not None else row["done"]
+        now = datetime.now(timezone.utc).isoformat()
+
+        updated_row = conn.execute(
+            """
+            UPDATE tasks
+            SET title = %s, done = %s, updated_at = %s
+            WHERE id = %s
+            RETURNING id, title, done, created_at, updated_at
+            """,
+            (new_title, new_done, now, id)
+        ).fetchone()
+        conn.commit()
+
+    return updated_row
 
 @app.delete("/tasks/{id}",status_code=204, summary="Delete task by id")
 async def deleteTask(id: str):
-    conn = database.get_db()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM tasks WHERE id = ?",(int(id),))
-    conn.commit()
-    conn.close()
-    if cursor.rowcount == 0:
-        raise HTTPException(status_code=404, detail=f"task {id} not found")
+    with database.get_db() as conn:
+        cursor = conn.execute("DELETE FROM tasks WHERE id = %s", (id,))
+        conn.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"task {id} not found")
     
 
 @app.get("/stats")
