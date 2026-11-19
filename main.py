@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel,Field
 from typing import Optional
 from datetime import datetime, timezone
+import os
+import redis
 
 class Task(BaseModel):
     id: int
@@ -23,6 +25,10 @@ class UpdateTask(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     database.init_db()
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    r = redis.from_url(redis_url)
+    if r.ping():
+        print(f"Redis connected: PING -> PONG ({redis_url})")
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -59,9 +65,17 @@ async def postTask(task: CreateTask):
 async def root():
     return {"name": "Task API", "version": "1.0", "endpoints": ["/tasks"]}
 
-@app.get("/health", summary="Check health of the app")
-async def health():
-    return {"status": "ok"}
+@app.get("/health", summary="Check application and database health")
+async def healthCheck():
+    try:
+        with database.get_db() as conn:
+            conn.execute("SELECT 1").fetchone()
+        return {"status": "ok", "db": "ok"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Database connection failed: {str(e)}"
+        )
 
 @app.get("/tasks", summary="Retrieve list of the tasks")
 async def getTasks(done: str | None = None, search: str | None = None):
