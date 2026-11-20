@@ -3,13 +3,20 @@ from datetime import datetime, timezone
 import psycopg
 from psycopg.rows import dict_row
 from dotenv import load_dotenv
+from supabase import create_client,Client
 
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def get_db():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+
+def get_supabase():
+    return supabase
 
 def init_db():
     with get_db() as conn:

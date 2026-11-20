@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status, Request
+from fastapi import FastAPI, HTTPException, status, Request, Response
 from contextlib import asynccontextmanager
 from fastapi.exceptions import RequestValidationError
 from config import database
@@ -8,7 +8,7 @@ from typing import Optional
 from datetime import datetime, timezone
 import os
 import redis
-
+import httpx
 class Task(BaseModel):
     id: int
     title: str 
@@ -66,16 +66,38 @@ async def root():
     return {"name": "Task API", "version": "1.0", "endpoints": ["/tasks"]}
 
 @app.get("/health", summary="Check application and database health")
-async def healthCheck():
+def healthCheck(response : Response):
+    db_status = "ok"
+    supabase_status = "ok"
     try:
         with database.get_db() as conn:
             conn.execute("SELECT 1").fetchone()
-        return {"status": "ok", "db": "ok"}
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database connection failed: {str(e)}"
+        db_status = f"error: {str(e)}"
+    try:
+        res = httpx.get(
+            f"{database.SUPABASE_URL}/auth/v1/health",
+            headers={"apikey": database.SUPABASE_KEY},
+            timeout=5.0,
         )
+        res.raise_for_status()
+    except Exception as e:
+        supabase_status = f"error: {str(e)}"
+
+    if db_status != "ok" or supabase_status != "ok":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {
+            "status": "error",
+            "db": db_status,
+            "supabase_auth": supabase_status,
+        }
+
+    return {
+        "status": "ok",
+        "db": "ok",
+        "supabase_auth": "ok",
+    }
+
 
 @app.get("/tasks", summary="Retrieve list of the tasks")
 async def getTasks(done: str | None = None, search: str | None = None):
