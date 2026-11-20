@@ -86,7 +86,22 @@ def get_protected_profile(authorization: str | None = Header(default=None)):
             content={"error": "Access token required"},
         )
 
-    return {
-        "message": "Welcome to your protected profile!",
-        "token_preview": f"{token[:10]}...",
-    }
+    try:
+        res = supabase.auth.get_user(token)
+        if not res or not res.user:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"error": "Invalid or expired token"},
+            )
+
+        user = res.user
+        return {
+            "id": str(user.id),
+            "email": user.email,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        }
+    except Exception:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Invalid or expired token"},
+        )
