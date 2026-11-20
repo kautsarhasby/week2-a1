@@ -1,4 +1,4 @@
-from fastapi import  status
+from fastapi import  status, Header
 from fastapi.responses import JSONResponse
 from supabase_auth.errors import AuthApiError
 from models import auth_model
@@ -71,3 +71,22 @@ def login(payload: auth_model.AuthRequest):
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"error": "Invalid login credentials"},
         )
+
+def get_protected_profile(authorization: str | None = Header(default=None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Access token required"},
+        )
+
+    token = authorization[len("Bearer "):].strip()
+    if not token:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Access token required"},
+        )
+
+    return {
+        "message": "Welcome to your protected profile!",
+        "token_preview": f"{token[:10]}...",
+    }

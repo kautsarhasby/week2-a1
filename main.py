@@ -1,4 +1,4 @@
-from fastapi import FastAPI, status, Request, Response
+from fastapi import FastAPI, status, Request, Response, Header
 from contextlib import asynccontextmanager
 from fastapi.exceptions import RequestValidationError
 from config import database
@@ -44,6 +44,16 @@ def signup(payload: auth_model.AuthRequest):
 @app.post("/auth/login", status_code=status.HTTP_200_OK)
 def login(payload: auth_model.AuthRequest):
     return auth_service.login(payload)
+
+# Public
+@app.get("/public/info", status_code=status.HTTP_200_OK, summary="Public information")
+def publicInfo():
+    return system_service.get_public_info()
+
+# Protected endpoint 
+@app.get("/protected/profile", status_code=status.HTTP_200_OK, summary="Protected user profile")
+def protectedProfile(authorization: str | None = Header(default=None)):
+    return auth_service.get_protected_profile(authorization)
 
 # Tasks
 @app.post("/tasks", status_code=201, summary="Create new task")
